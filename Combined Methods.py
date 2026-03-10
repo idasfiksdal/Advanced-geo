@@ -5,13 +5,13 @@ import matplotlib.pyplot as plt
 # INPUT DATA
 # ============================================================
 
-L = 16.0
+L = 16
 D = 2.5
 Ep = 35.5e9
 Epy = 68.07e6
 
-V_head = 6.5e3
-M_head = 151.45e3
+V_head = 1.625e6
+M_head = 37.86e6
 
 # ============================================================
 # COMMON PARAMETERS
@@ -135,7 +135,7 @@ def solve_analytical():
 # SOLVE BOTH METHODS
 # ============================================================
 
-x_fdm, y_fdm, th_fdm, M_fdm, V_fdm = solve_FDM(n=100)
+x_fdm, y_fdm, th_fdm, M_fdm, V_fdm = solve_FDM(n=200)
 x_an, y_an, th_an, M_an, V_an = solve_analytical()
 
 
@@ -164,9 +164,11 @@ axs[2].set_title("Moment [kNm]")
 axs[2].invert_yaxis()
 
 # Shear
-axs[3].plot(V_fdm/1e3, x_fdm)
-axs[3].plot(V_an/1e3, x_an, 'o', markevery=20)
+# Shear
+axs[3].plot(V_fdm/1000, x_fdm)
+axs[3].plot(V_an/1000, x_an, 'o', markevery=20)
 axs[3].set_title("Shear [kN]")
+axs[3].set_xlim(-6000, 10000)   # setter x-aksen
 axs[3].invert_yaxis()
 
 axs[0].legend()
