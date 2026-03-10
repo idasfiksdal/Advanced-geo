@@ -4,13 +4,13 @@ import pandas as pd
 import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 
 # ----------------------------
 # INNSTILLINGER
 # ----------------------------
 CLASSIFIED_CSV = "cpt_profile_1_with_robertson1986.csv"
 
-# Laggrenser (m)
 layers = [
     (0.0, 3.3),
     (3.3, 13.6),
@@ -64,8 +64,6 @@ required = ["Depth_m", "qt_MPa", "fs_kPa", "u2_kPa", "robertson_zone"]
 for c in required:
     if c not in df.columns:
         raise ValueError(f"Mangler kolonnen: {c}. Fant: {list(df.columns)}")
-
-for c in required:
     df[c] = pd.to_numeric(df[c], errors="coerce")
 
 df = df.dropna(subset=required).sort_values("Depth_m").copy()
@@ -80,30 +78,23 @@ zmin = 0.0
 zmax = float(np.nanmax(depth))
 
 # ----------------------------
-# PORE PRESSURE BEREGNING
+# BEREGN gamma'
 # ----------------------------
-GW_LEVEL = 0.0      # Juster hvis nødvendig
-gamma_w = 9.81      # kN/m³
-gamma_soil = 18.0   # kN/m³ (antatt konstant)
+pa_MPa = 0.1
+gamma_w = 9.81  # kN/m3
 
-# Hydrostatisk poretrykk
-u0 = np.where(depth > GW_LEVEL,
-              gamma_w * (depth - GW_LEVEL),
-              0.0)
+Rf = (fs / (qt * 1000.0)) * 100.0  # FR i %
 
-# Excess pore pressure
-delta_u = u2 - u0
+gamma_ratio = np.full_like(qt, np.nan, dtype=float)
+mask_gamma = (Rf > 0) & (qt > 0)
 
-# Totalspenning
-sigma_v = gamma_soil * depth
+gamma_ratio[mask_gamma] = (
+    0.27 * np.log10(Rf[mask_gamma]) +
+    0.36 * np.log10(qt[mask_gamma] / pa_MPa) +
+    1.236
+)
 
-# qt i kPa
-qt_kPa = qt * 1000.0
-
-# Pore pressure ratio Bq
-Bq = np.full_like(qt_kPa, np.nan)
-mask = (qt_kPa - sigma_v) > 0
-Bq[mask] = delta_u[mask] / (qt_kPa[mask] - sigma_v[mask])
+gamma_eff = gamma_ratio * gamma_w
 
 # ----------------------------
 # LAG-STATISTIKK
@@ -116,19 +107,19 @@ for z0, z1 in layers:
     qt_mean = float(np.nanmean(qt[m])) if n > 0 else np.nan
     fs_mean = float(np.nanmean(fs[m])) if n > 0 else np.nan
     u2_mean = float(np.nanmean(u2[m])) if n > 0 else np.nan
-    Bq_mean = float(np.nanmean(Bq[m])) if n > 0 else np.nan
+    gamma_mean = float(np.nanmean(gamma_eff[m])) if n > 0 else np.nan
 
-    layer_stats.append((z0, z1, n, qt_mean, fs_mean, u2_mean, Bq_mean))
+    layer_stats.append((z0, z1, n, qt_mean, fs_mean, u2_mean, gamma_mean))
 
 print("\nAverage per layer:")
-print("Layer (m)\tN\tqt (MPa)\tfs (kPa)\tu2 (kPa)\tBq")
-for z0, z1, n, qt_mean, fs_mean, u2_mean, Bq_mean in layer_stats:
+print("Layer (m)\tN\tqt (MPa)\tfs (kPa)\tu2 (kPa)\tgamma' (kN/m3)")
+for z0, z1, n, qt_mean, fs_mean, u2_mean, gamma_mean in layer_stats:
     print(f"{z0:>4.1f}-{z1:<4.1f}\t{n:>6d}\t"
           f"{qt_mean:>8.3f}\t{fs_mean:>8.2f}\t"
-          f"{u2_mean:>8.2f}\t{Bq_mean:>8.3f}")
+          f"{u2_mean:>8.2f}\t{gamma_mean:>8.3f}")
 
 # ----------------------------
-# HJELPEFUNKSJON
+# INTERVALLFUNKSJON
 # ----------------------------
 def compress_intervals(depth_arr, zone_arr):
     order = np.argsort(depth_arr)
@@ -165,26 +156,31 @@ def compress_intervals(depth_arr, zone_arr):
 intervals = compress_intervals(depth, zone)
 
 # ----------------------------
-# PLOT: qt | fs | u2 | soil profile
+# PLOT
 # ----------------------------
-fig, axes = plt.subplots(1, 4, sharey=True, figsize=(13, 7))
-ax_qt, ax_fs, ax_u2, ax_prof = axes
+fig, axes = plt.subplots(1, 5, sharey=True, figsize=(15, 7))
+ax_qt, ax_fs, ax_u2, ax_gamma, ax_prof = axes
 
 # qt
-ax_qt.plot(qt, depth, linewidth=1.5)
+ax_qt.plot(qt, depth)
 ax_qt.set_xlabel("qt (MPa)")
 ax_qt.set_ylabel("Depth (m)")
 ax_qt.grid(True, color="0.75")
 
 # fs
-ax_fs.plot(fs, depth, linewidth=1.5)
+ax_fs.plot(fs, depth)
 ax_fs.set_xlabel("fs (kPa)")
 ax_fs.grid(True, color="0.75")
 
 # u2
-ax_u2.plot(u2, depth, linewidth=1.5)
+ax_u2.plot(u2, depth)
 ax_u2.set_xlabel("u2 (kPa)")
 ax_u2.grid(True, color="0.75")
+
+# gamma'
+ax_gamma.plot(gamma_eff, depth)
+ax_gamma.set_xlabel("γ' (kN/m³)")
+ax_gamma.grid(True, color="0.75")
 
 # soil profile
 for z0, z1, zid in intervals:
@@ -197,15 +193,17 @@ ax_prof.set_xticks([])
 ax_prof.set_xlabel("Soil profile")
 
 # Layer means
-for (z0, z1, n, qt_mean, fs_mean, u2_mean, Bq_mean) in layer_stats:
+for (z0, z1, n, qt_mean, fs_mean, u2_mean, gamma_mean) in layer_stats:
     if np.isfinite(qt_mean):
         ax_qt.vlines(qt_mean, z0, z1, linestyles="--", linewidth=1.2, color="0.2")
     if np.isfinite(fs_mean):
         ax_fs.vlines(fs_mean, z0, z1, linestyles="--", linewidth=1.2, color="0.2")
     if np.isfinite(u2_mean):
         ax_u2.vlines(u2_mean, z0, z1, linestyles="--", linewidth=1.2, color="0.2")
+    if np.isfinite(gamma_mean):
+        ax_gamma.vlines(gamma_mean, z0, z1, linestyles="--", linewidth=1.2, color="0.2")
 
-# Røde laggrenser
+# Layer boundaries
 for b in layer_bounds:
     for ax in axes:
         ax.axhline(b, color="red", linewidth=1.2)
@@ -215,15 +213,11 @@ for ax in axes:
     ax.xaxis.tick_top()
     ax.xaxis.set_label_position("top")
 
-from matplotlib.patches import Patch
-
-legend_elements = []
-
-for zid in sorted(ZONE_NAMES.keys()):
-    legend_elements.append(
-        Patch(facecolor=ZONE_COLORS.get(zid, "#BDBDBD"),
-              label=ZONE_NAMES[zid])
-    )
+legend_elements = [
+    Patch(facecolor=ZONE_COLORS.get(zid, "#BDBDBD"),
+          label=ZONE_NAMES[zid])
+    for zid in sorted(ZONE_NAMES.keys())
+]
 
 ax_prof.legend(handles=legend_elements,
                loc="center left",

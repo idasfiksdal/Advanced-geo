@@ -32,7 +32,6 @@ Rf = df["FR_percent"].to_numpy(dtype=float)
 
 # ----------------------------
 # BEREGN gamma'
-# gamma'/gamma_w = 0.27*log10(Rf) + 0.36*log10(qt/pa) + 1.236
 # ----------------------------
 pa_MPa = 0.1
 gamma_w = 9.81  # kN/m3
@@ -65,7 +64,7 @@ layer_bounds = sorted(set([b for pair in layers for b in pair]))
 # AKSER
 # ----------------------------
 ZMIN = 0.0
-ZMAX = 35.0
+ZMAX = 40.2
 FR_LIM = 15.0
 
 # ----------------------------
@@ -75,37 +74,39 @@ fig, axes = plt.subplots(1, 5, sharey=True, figsize=(18, 7))
 ax_qt, ax_fs, ax_u2, ax_fr, ax_g = axes
 
 grid_color = "0.75"
+label_size = 14
+tick_size = 12
 
 # qt
 ax_qt.plot(qt, depth, color="red", linewidth=1.6)
-ax_qt.set_xlabel("qt (MPa)")
-ax_qt.set_ylabel("Depth (m)")
+ax_qt.set_xlabel("qt (MPa)", fontsize=label_size)
+ax_qt.set_ylabel("Depth (m)", fontsize=label_size)
 ax_qt.set_xlim(left=0)
 ax_qt.grid(True, color=grid_color)
 
 # fs
 ax_fs.plot(fs, depth, color="green", linewidth=1.6)
-ax_fs.set_xlabel("fs (kPa)")
+ax_fs.set_xlabel("fs (kPa)", fontsize=label_size)
 ax_fs.set_xlim(left=0)
 ax_fs.grid(True, color=grid_color)
 
 # u2
 ax_u2.plot(u2, depth, color="blue", linewidth=1.6)
-ax_u2.set_xlabel("u2 (kPa)")
+ax_u2.set_xlabel("u2 (kPa)", fontsize=label_size)
 ax_u2.set_xlim(-500, 2500)
 ax_u2.set_xticks([-500, 0, 500, 1000, 1500, 2000, 2500])
 ax_u2.grid(True, color=grid_color)
 
 # Rf
 ax_fr.plot(Rf, depth, color="orange", linewidth=1.6)
-ax_fr.set_xlabel("Rf (%)")
+ax_fr.set_xlabel("Rf (%)", fontsize=label_size)
 ax_fr.set_xlim(0, FR_LIM)
 ax_fr.set_xticks([0, 5, 10, 15])
 ax_fr.grid(True, color=grid_color)
 
 # gamma'
 ax_g.plot(gamma_eff, depth, color="black", linewidth=1.6)
-ax_g.set_xlabel("γ (kN/m³)")
+ax_g.set_xlabel("γ (kN/m³)", fontsize=label_size)
 ax_g.set_xlim(10, 22)
 ax_g.grid(True, color=grid_color)
 
@@ -114,12 +115,17 @@ ax_g.grid(True, color=grid_color)
 # ----------------------------
 for ax in axes:
     ax.set_ylim(ZMAX, ZMIN)
-    ax.set_yticks(np.arange(0, 36, 5))
+
+    # Sørger for at 40 m vises
+    ax.set_yticks(np.arange(0, 41, 5))
+
+    ax.tick_params(axis='both', labelsize=tick_size)
+
     ax.xaxis.tick_top()
     ax.xaxis.set_label_position("top")
     ax.grid(which="major", axis="y", color=grid_color)
 
-    # ---- LEGG INN LAGGRENSER ----
+    # Laggrenser
     for bound in layer_bounds:
         ax.axhline(y=bound, color="red", linestyle="-", linewidth=0.9)
 

@@ -7,18 +7,16 @@ from matplotlib.path import Path
 # ----------------------------
 # INNSTILLINGER
 # ----------------------------
-CSV_PATH = "cpt_profile_1_korrigert.csv"       # din fil med qt_MPa og FR_percent
-ZONES_JSON = "zones_robertson1986.json"        # polygonene
-ROBERTSON_IMAGE = "robertson1986.png"          # bakgrunnsbilde
+CSV_PATH = "cpt_profile_1_korrigert.csv"
+ZONES_JSON = "zones_robertson1986.json"
+ROBERTSON_IMAGE = "robertson1986.png"
 
 OUT_POINTS_PNG = "robertson1986_points.png"
 OUT_CSV = "cpt_with_robertson1986_zones.csv"
 
-# Diagramområde (Robertson 1986-figuren)
 FR_MIN, FR_MAX = 0.0, 8.0
 QT_BAR_MIN, QT_BAR_MAX = 1.0, 1000.0
 
-# Crop av bakgrunnsbilde (0-1). Juster om nødvendig.
 CROP = dict(left=0.08, right=0.995, top=0.02, bottom=0.995)
 
 ZONE_NAMES = {
@@ -62,9 +60,10 @@ def load_zone_paths(json_path: str):
     out = []
     for z in zones:
         zid = int(z["zone"])
-        poly = np.array(z["polygon_FR_logqt"], dtype=float)  # (FR, log10(qt_bar))
+        poly = np.array(z["polygon_FR_logqt"], dtype=float)
         out.append({"zone": zid, "path": Path(poly)})
     return out
+
 
 def classify(fr_percent, qt_bar, zone_paths):
     fr = np.asarray(fr_percent, dtype=float)
@@ -85,6 +84,7 @@ def classify(fr_percent, qt_bar, zone_paths):
                 zone_out[i] = z["zone"]
                 break
     return zone_out
+
 
 def setup_robertson_axes(ax):
     ymin = np.log10(QT_BAR_MIN)
@@ -110,6 +110,7 @@ def setup_robertson_axes(ax):
     ax.set_yticks(yt)
     ax.set_yticklabels(["1", "10", "100", "1000"])
 
+
 # ----------------------------
 # KJØR
 # ----------------------------
@@ -123,28 +124,56 @@ for c in needed:
     df[c] = pd.to_numeric(df[c], errors="coerce")
 
 df = df.dropna(subset=needed).sort_values("Depth_m").copy()
-
-# Konverter qt til bar (1 MPa = 10 bar)
 df["qt_bar"] = df["qt_MPa"] * 10.0
 
 zone_paths = load_zone_paths(ZONES_JSON)
-df["robertson_zone"] = classify(df["FR_percent"].to_numpy(), df["qt_bar"].to_numpy(), zone_paths)
-df["soil_type"] = df["robertson_zone"].map(ZONE_NAMES).fillna("Unclassified")
+df["robertson_zone"] = classify(
+    df["FR_percent"].to_numpy(),
+    df["qt_bar"].to_numpy(),
+    zone_paths
+)
 
-# Lagre med klassifisering
+df["soil_type"] = df["robertson_zone"].map(ZONE_NAMES).fillna("Unclassified")
 df.to_csv(OUT_CSV, index=False, encoding="utf-8")
 
-# Plot punktene oppå bakgrunnsfiguren
-fig, ax = plt.subplots(figsize=(12, 8))
+# ----------------------------
+# PLOT
+# ----------------------------
+fig, ax = plt.subplots(figsize=(15, 9))  # større figur
 setup_robertson_axes(ax)
-ax.set_title("Robertson 1986: classified data")
+ax.set_title("Robertson 1986: Classified CPT Data", fontsize=14)
 
-y_logqt = np.log10(df["qt_bar"].to_numpy(dtype=float))
-for zid, g in df.groupby("robertson_zone"):
+unique_zones = sorted(df["robertson_zone"].unique())
+
+for zid in unique_zones:
+    g = df[df["robertson_zone"] == zid]
     col = ZONE_COLORS.get(int(zid), ZONE_COLORS[0])
-    ax.scatter(g["FR_percent"], np.log10(g["qt_bar"]), s=10, alpha=0.85, color=col, label=f"{int(zid)}")
+    name = ZONE_NAMES.get(int(zid), "Unclassified")
 
-ax.legend(title="Sone", fontsize=8, title_fontsize=9, loc="upper left", bbox_to_anchor=(1.02, 1.0))
+    ax.scatter(
+        g["FR_percent"],
+        np.log10(g["qt_bar"]),
+        s=20,                 # større punkter
+        alpha=0.9,
+        color=col,
+        label=f"{int(zid)} – {name}"
+    )
+
+legend = ax.legend(
+    title="Soil Behavior Type (Robertson 1986)",
+    fontsize=11,
+    title_fontsize=12,
+    loc="center left",
+    bbox_to_anchor=(1.05, 0.5),
+    frameon=True,
+    borderpad=1.2,
+    labelspacing=1.2,
+)
+
+# større markører i legend
+for handle in legend.legend_handles:
+    handle.set_sizes([80])
+
 fig.tight_layout()
-fig.savefig(OUT_POINTS_PNG, dpi=200, bbox_inches="tight")
+fig.savefig(OUT_POINTS_PNG, dpi=300, bbox_inches="tight")
 plt.show()
